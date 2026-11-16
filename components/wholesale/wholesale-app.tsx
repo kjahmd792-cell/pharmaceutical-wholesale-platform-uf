@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import {
   Activity,
+  Archive,
   BarChart3,
   Boxes,
   Building2,
@@ -26,12 +27,13 @@ import { DeliveryView } from "./delivery-view"
 import { PharmacyAccount, PharmacyCart, PharmacyCatalog, PharmacyHome, PharmacyInvoices, PharmacyOrders } from "./pharmacy-views"
 import { ReportsView } from "./reports-view"
 import { PharmacyOtpAlerts, PharmacyOtpBell } from "./pharmacy-otp-notifications"
-import { demoDeliveryAgents, demoInvoices, demoOrders, demoPharmacies, demoProducts } from "./demo-data"
+import { ArchiveView } from "./archive-view"
+import { demoArchiveOrders, demoDeliveryAgents, demoInvoices, demoOrders, demoPharmacies, demoProducts } from "./demo-data"
 import { formatCurrency } from "./shared"
 import type { CartLine, CheckoutDetails, DeliveryStatus, Invoice, Order, Pharmacy, Product } from "./types"
 
 export type DemoRole = "owner" | "inventory" | "orders" | "dispatcher" | "driver" | "pharmacy"
-type Tab = "overview" | "orders" | "inventory" | "pharmacies" | "deliveries" | "invoices" | "reports" | "team" | "branches" | "offers" | "settings" | "home" | "catalog" | "cart" | "account"
+type Tab = "overview" | "archive" | "orders" | "inventory" | "pharmacies" | "deliveries" | "invoices" | "reports" | "team" | "branches" | "offers" | "settings" | "home" | "catalog" | "cart" | "account"
 type InitialRole = "company" | "driver" | "pharmacy"
 type Props = { initialRole: InitialRole; initialDemoRole?: DemoRole }
 
@@ -45,6 +47,7 @@ const companyNavigation: NavItem[] = [
   { id: "deliveries", label: "التوصيل", icon: Truck },
   { id: "invoices", label: "الفواتير والتحصيل", icon: FileText },
   { id: "reports", label: "التقارير", icon: BarChart3 },
+  { id: "archive", label: "الأرشيف", icon: Archive, badge: "جديد" },
   { id: "team", label: "الفريق والصلاحيات", icon: Users },
   { id: "branches", label: "الفروع والتغطية", icon: Building2, badge: "جديد" },
   { id: "offers", label: "العروض التجارية", icon: Tag, badge: "جديد" },
@@ -61,9 +64,9 @@ const pharmacyNavigation: NavItem[] = [
 ]
 
 const roleNavigation: Record<DemoRole, Tab[]> = {
-  owner: ["overview", "orders", "inventory", "pharmacies", "deliveries", "invoices", "reports", "team", "branches", "offers", "settings"],
+  owner: ["overview", "orders", "inventory", "pharmacies", "deliveries", "invoices", "reports", "archive", "team", "branches", "offers", "settings"],
   inventory: ["overview", "inventory", "branches"],
-  orders: ["overview", "orders", "pharmacies", "invoices", "reports"],
+  orders: ["overview", "orders", "pharmacies", "invoices", "reports", "archive"],
   dispatcher: ["overview", "orders", "deliveries", "branches"],
   driver: ["deliveries"],
   pharmacy: ["home", "catalog", "cart", "orders", "invoices", "account"],
@@ -86,6 +89,7 @@ const pageCopy: Record<Tab, { title: string; subtitle: string }> = {
   deliveries: { title: "الإسناد والتوصيل", subtitle: "توزيع الطلبات ومتابعة مسارات التسليم" },
   invoices: { title: "الفواتير والتحصيل", subtitle: "متابعة الفواتير والمبالغ المستحقة" },
   reports: { title: "التقارير والتحليلات", subtitle: "قراءة سريعة لحركة المبيعات والتشغيل" },
+  archive: { title: "الأرشيف", subtitle: "أرشيف متكامل لفواتير البضائع وسندات التسليم لكل صيدلية" },
   team: { title: "الفريق والصلاحيات", subtitle: "استعراض الأدوار المقترحة داخل الشركة" },
   branches: { title: "الفروع والتغطية", subtitle: "نظرة على شبكة التوزيع المقترحة" },
   offers: { title: "العروض التجارية", subtitle: "حملات وأفكار لتنمية المبيعات" },
@@ -307,6 +311,7 @@ export function WholesaleApp({ initialRole, initialDemoRole }: Props) {
     if (tab === "deliveries") return <CompanyDispatchView orders={orders} agents={demoDeliveryAgents} onAssign={assignDelivery} />
     if (tab === "invoices") return <InvoicesView invoices={invoices} />
     if (tab === "reports") return <ReportsView orders={orders} invoices={invoices} products={products} />
+    if (tab === "archive") return <ArchiveView orders={[...orders, ...demoArchiveOrders]} pharmacies={pharmacies} agents={demoDeliveryAgents} />
     if (tab === "team") return <CompanyTeamView />
     if (tab === "branches") return <BranchesView />
     if (tab === "offers") return <OffersView />

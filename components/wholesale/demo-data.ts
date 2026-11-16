@@ -100,6 +100,47 @@ export const demoInvoices: Invoice[] = [
   { id: "INV-236", orderId: "ORD-236", pharmacy: "صيدلية الندى التجريبية", issuedAt: hoursAgo(9), total: 299, paidAmount: 0, paymentMethod: "نقدًا عند التسليم" },
 ]
 
+const archivePharmacies = [
+  { name: "صيدلية الندى التجريبية", phone: "050 000 0141", region: "حي الندى، الرياض", recipient: "مها العتيبي" },
+  { name: "صيدلية الشفاء التجريبية", phone: "050 000 0183", region: "حي الملقا، الرياض", recipient: "نورة الحربي" },
+  { name: "صيدلية الياسمين التجريبية", phone: "050 000 0294", region: "حي الياسمين، الرياض", recipient: "سارة المطيري" },
+  { name: "صيدلية الروضة التجريبية", phone: "050 000 0312", region: "حي الروضة، الرياض", recipient: "خالد القحطاني" },
+]
+const archiveMethods = ["نقدًا عند التسليم", "تحويل بنكي", "آجل", "شبكة (مدى)"]
+const archiveAgents = ["DA-101", "DA-102", "DA-103"]
+
+export const demoArchiveOrders: Order[] = Array.from({ length: 56 }, (_, index) => {
+  const pharmacy = archivePharmacies[(index * 3 + 1) % archivePharmacies.length]
+  const items = orderItems(Array.from({ length: 2 + (index % 3) }, (_, line) => [demoProducts[(index * 7 + line * 11) % demoProducts.length].id, 2 + ((index + line * 5) % 9)] as [string, number]))
+  const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+  const createdAt = hoursAgo(26 + index * 31)
+  const number = 235 - index
+  const status = index % 13 === 7 ? "rejected" : index % 11 === 5 ? "cancelled" : "delivered"
+  const paidAmount = status !== "delivered" ? 0 : index % 5 === 0 ? Math.round(total / 2) : index % 7 === 3 ? 0 : total
+  const method = archiveMethods[index % archiveMethods.length]
+  const delivered = status === "delivered"
+  return {
+    id: `ORD-${number}`,
+    pharmacy: pharmacy.name,
+    pharmacyPhone: pharmacy.phone,
+    region: pharmacy.region,
+    items,
+    total,
+    orderStatus: status,
+    deliveryStatus: delivered ? "delivered" : null,
+    paymentStatus: paidAmount >= total ? "paid" : paidAmount > 0 ? "partially_paid" : "unpaid",
+    paymentMethod: method,
+    paidAmount,
+    assignedTo: delivered ? archiveAgents[index % archiveAgents.length] : null,
+    createdAt,
+    invoiceId: delivered ? `INV-${number}` : null,
+    recipientName: pharmacy.recipient,
+    deliveryAddress: pharmacy.region,
+    rejectionReason: status === "rejected" ? "نفاد كمية أحد الأصناف" : status === "cancelled" ? "ألغته الصيدلية قبل التجهيز" : undefined,
+    deliveryProof: delivered ? { recipient: pharmacy.recipient, collectedAmount: paidAmount, paymentMethod: method, note: index % 4 === 0 ? "تم التسليم للصيدلي المناوب" : "", deliveredAt: hoursAgo(20 + index * 31), otpVerified: index % 6 !== 2 } : undefined,
+  } satisfies Order
+})
+
 export const demoDeliveryAgents: DeliveryAgent[] = [
   { id: "DA-101", name: "عمر السبيعي", phone: "050 000 0221", region: "شمال الرياض", status: "busy" },
   { id: "DA-102", name: "سارة الحربي", phone: "050 000 0222", region: "وسط الرياض", status: "available" },
