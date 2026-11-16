@@ -41,6 +41,7 @@ export type DeliveryProof = {
   paymentMethod: string
   note: string
   deliveredAt: string
+  otpVerified?: boolean
 }
 
 export type Order = {

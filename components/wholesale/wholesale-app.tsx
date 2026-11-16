@@ -25,6 +25,7 @@ import { CompanyTeamView } from "./company-team-view"
 import { DeliveryView } from "./delivery-view"
 import { PharmacyAccount, PharmacyCart, PharmacyCatalog, PharmacyHome, PharmacyInvoices, PharmacyOrders } from "./pharmacy-views"
 import { ReportsView } from "./reports-view"
+import { PharmacyOtpAlerts, PharmacyOtpBell } from "./pharmacy-otp-notifications"
 import { demoDeliveryAgents, demoInvoices, demoOrders, demoPharmacies, demoProducts } from "./demo-data"
 import { formatCurrency } from "./shared"
 import type { CartLine, CheckoutDetails, DeliveryStatus, Invoice, Order, Pharmacy, Product } from "./types"
@@ -271,7 +272,7 @@ export function WholesaleApp({ initialRole, initialDemoRole }: Props) {
     notify("تم تحديث حالة التوصيل في بيانات العرض.")
   }
 
-  function completeDelivery(orderId: string, recipient: string, collectedAmount: number, paymentMethod: string, note: string) {
+  function completeDelivery(orderId: string, recipient: string, collectedAmount: number, paymentMethod: string, note: string, otpVerified = false) {
     const order = orders.find((item) => item.id === orderId)
     if (!order) return
     const paidAmount = Math.min(order.total, order.paidAmount + Math.max(0, collectedAmount))
@@ -282,7 +283,7 @@ export function WholesaleApp({ initialRole, initialDemoRole }: Props) {
       deliveryStatus: "delivered",
       paidAmount,
       paymentStatus,
-      deliveryProof: { recipient, collectedAmount, paymentMethod, note, deliveredAt: new Date().toISOString() },
+      deliveryProof: { recipient, collectedAmount, paymentMethod, note, deliveredAt: new Date().toISOString(), otpVerified },
     })
     setProducts((current) => current.map((product) => {
       const delivered = order.items.filter((item) => item.productId === product.id).reduce((total, item) => total + item.quantity, 0)
@@ -322,7 +323,7 @@ export function WholesaleApp({ initialRole, initialDemoRole }: Props) {
   }
 
   const content = isDriver
-    ? <DeliveryView orders={orders} driverName={driverName} driverId={currentDriverId} agents={demoDeliveryAgents} onDriverChange={setDriverName} onStatusChange={updateDelivery} onComplete={completeDelivery} onFail={failDelivery} />
+    ? <DeliveryView orders={orders} driverName={driverName} driverId={currentDriverId} agents={demoDeliveryAgents} onDriverChange={setDriverName} onStatusChange={updateDelivery} onComplete={completeDelivery} onFail={failDelivery} onOpenPharmacy={() => switchRole("pharmacy")} />
     : isPharmacy
       ? renderPharmacyContent()
       : renderCompanyContent()
@@ -366,11 +367,11 @@ export function WholesaleApp({ initialRole, initialDemoRole }: Props) {
       <main className="main-area" id="main">
         <header className="topbar">
           <div className="topbar-title"><span className="eyebrow">الشاعر للتوزيع الدوائي · شركة واحدة</span><h1>{page.title}</h1><p>{page.subtitle}</p></div>
-          <div className="topbar-actions"><span className="count-badge">واجهة تجريبية</span><Link className="subtle-button quick-login-button" href="/company/sign-in">اختيار حساب <Users aria-hidden="true" /></Link></div>
+          <div className="topbar-actions">{isPharmacy && <PharmacyOtpBell pharmacyName={currentPharmacy.name} />}<span className="count-badge">واجهة تجريبية</span><Link className="subtle-button quick-login-button" href="/company/sign-in">اختيار حساب <Users aria-hidden="true" /></Link></div>
         </header>
         <div className="company-data-notice demo-data-notice" role="note"><span className="company-data-notice-icon">i</span><p><strong>وضع العرض:</strong> البيانات توضيحية، وأي تعديل يظل مؤقتًا داخل هذه الجلسة.</p></div>
         {feedback && <div className="feedback-message" role="status" aria-live="polite"><span>✓</span>{feedback}<button type="button" onClick={() => setFeedback("")} aria-label="إخفاء الإشعار">×</button></div>}
-        <div className="page-content">{content}</div>
+        <div className="page-content">{isPharmacy && <PharmacyOtpAlerts pharmacyName={currentPharmacy.name} />}{content}</div>
         <footer className="app-footer"><span>الشاعر · مساحة عمليات موحّدة</span><span>نسخة عرض للعميل · لا توجد بيانات فعلية</span></footer>
       </main>
     </div>

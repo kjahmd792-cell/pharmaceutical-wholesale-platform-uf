@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Clock3, MapPin, Phone, Truck } from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Clock3, MapPin, Phone, ShieldCheck, Truck } from "lucide-react"
+import { DeliveryOtpPanel } from "./delivery-otp-panel"
+import { issueOtp } from "./otp-store"
 import { DeliveryProgress, formatCurrency, formatTime, SectionHeading, StatusPill } from "./shared"
 import type { DeliveryAgent, DeliveryStatus, Order } from "./types"
 
@@ -17,6 +19,7 @@ export function DeliveryView({
   onStatusChange,
   onComplete,
   onFail,
+  onOpenPharmacy,
 }: {
   orders: Order[]
   driverName: string
@@ -25,10 +28,13 @@ export function DeliveryView({
   driverId?: string
   lockedDriver?: boolean
   onStatusChange: (orderId: string, status: DeliveryStatus) => void
-  onComplete: (orderId: string, recipient: string, amount: number, method: string, note: string) => void
+  onComplete: (orderId: string, recipient: string, amount: number, method: string, note: string, otpVerified?: boolean) => void
   onFail: (orderId: string, reason: string, note: string) => void
+  onOpenPharmacy?: () => void
 }) {
   const [proofOrderId, setProofOrderId] = useState<string | null>(null)
+  const [otpOrderId, setOtpOrderId] = useState<string | null>(null)
+  const [verifiedOrderIds, setVerifiedOrderIds] = useState<string[]>([])
   const [recipient, setRecipient] = useState("")
   const [amount, setAmount] = useState("")
   const [method, setMethod] = useState("نقدًا")
@@ -53,11 +59,23 @@ export function DeliveryView({
     setProofNote("")
   }
 
+  function requestOtp(order: Order) {
+    issueOtp({ orderId: order.id, pharmacy: order.pharmacy, driverName, total: order.total, itemsCount: order.items.length })
+    setOtpOrderId(order.id)
+  }
+
+  function handleVerified(order: Order) {
+    setVerifiedOrderIds((current) => [...current, order.id])
+    setOtpOrderId(null)
+    beginProof(order)
+    setRecipient(order.recipientName ?? "")
+  }
+
   function submitProof(event: React.FormEvent<HTMLFormElement>, order: Order) {
     event.preventDefault()
     const collected = Number(amount)
     if (!recipient.trim() || !Number.isFinite(collected) || collected < 0 || collected > order.total - order.paidAmount) return
-    onComplete(order.id, recipient.trim(), collected, method, proofNote.trim())
+    onComplete(order.id, recipient.trim(), collected, method, proofNote.trim(), verifiedOrderIds.includes(order.id))
     setProofOrderId(null)
   }
 
@@ -84,11 +102,12 @@ export function DeliveryView({
           <button className="order-detail-toggle driver-invoice-toggle" aria-expanded={expandedOrderId === order.id} aria-controls={`delivery-items-${order.id}`} onClick={() => setExpandedOrderId((current) => current === order.id ? null : order.id)}><span>تفاصيل الفاتورة · {order.items.length} أصناف</span><ChevronDown aria-hidden="true" /></button>
           <div id={`delivery-items-${order.id}`} className="pharmacy-order-details" hidden={expandedOrderId !== order.id}><div className="pharmacy-order-items">{order.items.map((item) => <div className="pharmacy-order-item" key={item.productId}><span>{item.name} × {item.quantity}</span><strong>{formatCurrency(item.unitPrice * item.quantity)}</strong></div>)}</div><div className="invoice-line-total"><span>الإجمالي</span><strong>{formatCurrency(order.total)}</strong></div></div>
           <div className="delivery-financials"><div><span>المطلوب تحصيله</span><strong>{formatCurrency(due)}</strong></div><div><span>طريقة الدفع</span><strong>{order.paymentMethod}</strong></div></div>
-          {order.deliveryProof && <div className="driver-proof-summary"><Check aria-hidden="true" /><span>استلمها {order.deliveryProof.recipient} · {formatTime(order.deliveryProof.deliveredAt)}</span><strong>تم تحصيل {formatCurrency(order.deliveryProof.collectedAmount)}</strong></div>}
+          {order.deliveryProof && <div className="driver-proof-summary"><Check aria-hidden="true" /><span>استلمها {order.deliveryProof.recipient} · {formatTime(order.deliveryProof.deliveredAt)}</span>{order.deliveryProof.otpVerified && <span className="otp-verified-chip"><ShieldCheck aria-hidden="true" /> موثّق برمز التحقق</span>}<strong>تم تحصيل {formatCurrency(order.deliveryProof.collectedAmount)}</strong></div>}
+          {otpOrderId === order.id && <DeliveryOtpPanel order={order} driverName={driverName} onVerified={() => handleVerified(order)} onCancel={() => setOtpOrderId(null)} onOpenPharmacy={onOpenPharmacy} />}
           {order.deliveryStatus === "failed" ? <div className="failure-note"><strong>تعذر التسليم</strong><span>{order.rejectionReason ?? "تم تسجيل سبب التعذر"}</span><button className="subtle-button" onClick={() => onStatusChange(order.id, "assigned")}>إعادة المحاولة</button></div> : null}
-          {proofOrderId === order.id ? <form className="proof-form" onSubmit={(event) => submitProof(event, order)}><div className="proof-form-heading"><strong>إثبات التسليم والتحصيل</strong><small>إكمال البيانات يسجل التوصيل فقط؛ ويُحدّث الرصيد وفق المبلغ الفعلي.</small></div><div className="proof-fields"><label className="field-label">اسم المستلم<input required value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="الاسم كما استلم الطلب" /></label><label className="field-label">المبلغ المحصل<input required type="number" min="0" max={due} step="1" value={amount} onChange={(event) => setAmount(event.target.value)} /><small>المتبقي قبل التوصيل: {formatCurrency(due)}</small></label><label className="field-label">طريقة التحصيل<select value={method} onChange={(event) => setMethod(event.target.value)}><option>نقدًا</option><option>تحويل بنكي</option><option>لم يتم التحصيل</option></select></label><label className="field-label">ملاحظة<input value={proofNote} onChange={(event) => setProofNote(event.target.value)} placeholder="اختياري" /></label></div><div className="form-actions"><button type="button" className="subtle-button" onClick={() => setProofOrderId(null)}>إلغاء</button><button type="submit" className="primary-button"><Check aria-hidden="true" /> تأكيد التسليم</button></div></form> : null}
+          {proofOrderId === order.id ? <form className="proof-form" onSubmit={(event) => submitProof(event, order)}><div className="proof-form-heading"><strong>إثبات التسليم والتحصيل</strong><small>إكمال البيانات يسجل التوصيل فقط؛ ويُحدّث الرصيد وفق المبلغ الفعلي.</small>{verifiedOrderIds.includes(order.id) && <span className="otp-verified-chip"><ShieldCheck aria-hidden="true" /> تم التحقق من هوية المستلم برمز الصيدلية</span>}</div><div className="proof-fields"><label className="field-label">اسم المستلم<input required value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="الاسم كما استلم الطلب" /></label><label className="field-label">المبلغ المحصل<input required type="number" min="0" max={due} step="1" value={amount} onChange={(event) => setAmount(event.target.value)} /><small>المتبقي قبل التوصيل: {formatCurrency(due)}</small></label><label className="field-label">طريقة التحصيل<select value={method} onChange={(event) => setMethod(event.target.value)}><option>نقدًا</option><option>تحويل بنكي</option><option>لم يتم التحصيل</option></select></label><label className="field-label">ملاحظة<input value={proofNote} onChange={(event) => setProofNote(event.target.value)} placeholder="اختياري" /></label></div><div className="form-actions"><button type="button" className="subtle-button" onClick={() => setProofOrderId(null)}>إلغاء</button><button type="submit" className="primary-button"><Check aria-hidden="true" /> تأكيد التسليم</button></div></form> : null}
           {failureOrderId === order.id ? <form className="proof-form failure-form" onSubmit={(event) => submitFailure(event, order)}><div className="proof-form-heading"><strong>تسجيل تعذر التسليم</strong><small>سيبقى الطلب مفتوحًا بانتظار قرار مسؤول التوصيل.</small></div><div className="proof-fields"><label className="field-label">سبب التعذر<select value={failureReason} onChange={(event) => setFailureReason(event.target.value)}>{failureReasons.map((reason) => <option key={reason}>{reason}</option>)}</select></label><label className="field-label">ملاحظة<input value={failureNote} onChange={(event) => setFailureNote(event.target.value)} placeholder="تفاصيل إضافية، إن وجدت" /></label></div><div className="form-actions"><button type="button" className="subtle-button" onClick={() => setFailureOrderId(null)}>إلغاء</button><button type="submit" className="danger-button">حفظ التعذر</button></div></form> : null}
-          {!proofOrderId && !failureOrderId && order.deliveryStatus !== "delivered" && order.deliveryStatus !== "failed" && <div className="delivery-actions">{order.deliveryStatus === "arrived" ? <button className="primary-button" onClick={() => beginProof(order)}><Check aria-hidden="true" /> تسجيل التسليم</button> : <button className="primary-button" onClick={() => onStatusChange(order.id, order.deliveryStatus === "on_way" ? "arrived" : "on_way")}>{nextAction}<ArrowUpRight aria-hidden="true" /></button>}<button className="subtle-button" onClick={() => { setFailureOrderId(order.id); setFailureReason(failureReasons[0]) }}>تعذر التسليم</button><button className="route-button" type="button" disabled><ArrowDownLeft aria-hidden="true" /> خريطة · قيد التطوير</button></div>}
+          {!proofOrderId && !failureOrderId && otpOrderId !== order.id && order.deliveryStatus !== "delivered" && order.deliveryStatus !== "failed" && <div className="delivery-actions">{order.deliveryStatus === "arrived" ? <button className="primary-button otp-confirm-button" onClick={() => requestOtp(order)}><ShieldCheck aria-hidden="true" /> تأكيد التسليم برمز التحقق</button> : <button className="primary-button" onClick={() => onStatusChange(order.id, order.deliveryStatus === "on_way" ? "arrived" : "on_way")}>{nextAction}<ArrowUpRight aria-hidden="true" /></button>}<button className="subtle-button" onClick={() => { setFailureOrderId(order.id); setFailureReason(failureReasons[0]) }}>تعذر التسليم</button><button className="route-button" type="button" disabled><ArrowDownLeft aria-hidden="true" /> خريطة · قيد التطوير</button></div>}
         </article>
       })}{deliveries.length === 0 && <div className="no-deliveries"><span className="empty-icon"><Truck aria-hidden="true" /></span><strong>{view === "active" ? "لا توجد توصيلات نشطة" : view === "failed" ? "لا توجد حالات تعذر تسليم" : "لا توجد توصيلات مكتملة"}</strong><p>{view === "active" ? `ستظهر هنا الطلبات المسندة إلى ${driverName}.` : view === "failed" ? "تظهر الطلبات المتعثرة هنا حتى إعادة المحاولة." : "ستظهر هنا الطلبات بعد توثيق التسليم."}</p></div>}</div>
     </div>
